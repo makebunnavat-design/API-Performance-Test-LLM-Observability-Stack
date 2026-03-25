@@ -1,0 +1,18 @@
+_format_version: "3.0"
+
+services:
+  - name: my-repair-chatbot
+    url: http://host.docker.internal:18080 
+    read_timeout: 300000   # สั่งให้ Kong ทนรอ AI พิมพ์ตอบ 5 นาที ห้ามตัดสาย
+    routes:
+      - name: repair-api
+        paths:
+          - /        # กวาดทุก API ทุกเส้นทางของระบบมาผูกไว้ที่ Kong
+        strip_path: false
+
+plugins:
+  - name: prometheus
+    config:
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true

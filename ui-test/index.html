@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kong Latency Control Room</title>
+    <style>
+        :root {
+            --panel: rgba(8, 24, 32, 0.78);
+            --panel-border: rgba(136, 212, 197, 0.22);
+            --ink: #ecf8f3;
+            --muted: #8fb7ae;
+            --accent: #45d1b4;
+            --danger: #ff7676;
+            --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI Variable", "Bahnschrift", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top left, rgba(69, 209, 180, 0.18), transparent 30%),
+                radial-gradient(circle at bottom right, rgba(255, 185, 92, 0.18), transparent 26%),
+                linear-gradient(160deg, #071018 0%, #0f2130 48%, #081420 100%);
+        }
+
+        .page {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 32px 20px 48px;
+        }
+
+        .hero {
+            display: grid;
+            gap: 14px;
+            margin-bottom: 26px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            width: fit-content;
+            padding: 8px 14px;
+            border-radius: 999px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-size: 12px;
+            color: var(--accent);
+            background: rgba(69, 209, 180, 0.08);
+            border: 1px solid rgba(69, 209, 180, 0.2);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 3.4rem);
+            line-height: 1;
+        }
+
+        .subtitle {
+            max-width: 760px;
+            margin: 0;
+            color: var(--muted);
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 18px;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 22px;
+            padding: 20px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.15rem;
+        }
+
+        .helper {
+            margin: 0 0 16px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .status-list {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .status-pill {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .status-pill span {
+            color: var(--muted);
+        }
+
+        .online {
+            color: var(--accent);
+        }
+
+        .offline {
+            color: var(--danger);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+
+        input, textarea, button {
+            width: 100%;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font: inherit;
+        }
+
+        input, textarea {
+            padding: 12px 14px;
+            color: var(--ink);
+            background: rgba(4, 12, 20, 0.72);
+            margin-bottom: 12px;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+        }
+
+        button {
+            padding: 12px 14px;
+            cursor: pointer;
+            color: #04110d;
+            background: linear-gradient(135deg, var(--accent), #89f0d6);
+            border: none;
+            font-weight: 700;
+            transition: transform 120ms ease, filter 120ms ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.03);
+        }
+
+        .links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .link-button {
+            width: auto;
+            padding: 10px 12px;
+            color: var(--ink);
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+        }
+
+        .response {
+            margin-top: 14px;
+            padding: 14px;
+            border-radius: 14px;
+            background: rgba(4, 12, 20, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            white-space: pre-wrap;
+            line-height: 1.55;
+            min-height: 80px;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <section class="hero">
+            <span class="eyebrow">Kong + Prometheus + Grafana + LLM</span>
+            <h1>Latency Control Room</h1>
+            <p class="subtitle">
+                ใช้หน้าจอนี้เช็กสถานะ stack, ยิง traffic ผ่าน Kong, แล้วถาม chatbot ว่า route ไหนช้าที่สุด
+                ในช่วงเวลาล่าสุด โดยดึงข้อมูลจาก Prometheus และ snapshot ใน Postgres
+            </p>
+        </section>
+
+        <section class="grid">
+            <article class="card">
+                <h2>System Status</h2>
+                <p class="helper">สถานะทั้งหมดอ่านผ่าน backend เดียวเพื่อเลี่ยงปัญหา CORS จาก browser</p>
+                <div id="status-list" class="status-list"></div>
+                <button onclick="checkStatus()">รีเฟรชสถานะ</button>
+                <div class="links">
+                    <button class="link-button" onclick="window.open('http://localhost:9090', '_blank')">Prometheus</button>
+                    <button class="link-button" onclick="window.open('http://localhost:3000', '_blank')">Grafana</button>
+                    <button class="link-button" onclick="window.open('http://localhost:18080/docs', '_blank')">Chatbot API</button>
+                </div>
+            </article>
+
+            <article class="card">
+                <h2>Probe Kong Route</h2>
+                <p class="helper">ทดสอบว่า Konnect route ถูก apply แล้วและ Kong สามารถ proxy ไปที่ chatbot ได้</p>
+                <label for="probe-path">เส้นทางผ่าน Kong</label>
+                <input id="probe-path" value="/api/health">
+                <button onclick="probeKong()">ยิง request ผ่าน Kong</button>
+                <div id="probe-result" class="response muted">รอการทดสอบ</div>
+            </article>
+
+            <article class="card">
+                <h2>Generate Traffic</h2>
+                <p class="helper">สร้างโหลดเล็ก ๆ ผ่าน Kong เพื่อให้ Prometheus มี latency metric สำหรับตอบคำถาม</p>
+                <label for="traffic-path">เส้นทางผ่าน Kong</label>
+                <input id="traffic-path" value="/api/demo/random?min_ms=75&max_ms=900">
+                <div class="row">
+                    <div>
+                        <label for="traffic-count">จำนวนครั้ง</label>
+                        <input id="traffic-count" type="number" value="20" min="1" max="200">
+                    </div>
+                </div>
+                <button onclick="generateTraffic()">เริ่มสร้าง traffic</button>
+                <div id="traffic-result" class="response muted">ยังไม่ได้ยิงโหลด</div>
+            </article>
+
+            <article class="card" style="grid-column: 1 / -1;">
+                <h2>Latency Chatbot</h2>
+                <p class="helper">
+                    ตัวอย่างคำถาม: "API ไหน latency สูงสุด", "เส้นไหน traffic เยอะสุด", "Kong overhead ของ route ที่ช้าที่สุดเท่าไร"
+                </p>
+                <label for="question">คำถาม</label>
+                <textarea id="question">API ไหน latency สูงสุดใน 10 นาทีล่าสุด และ p95 เท่าไร</textarea>
+                <div class="row">
+                    <div>
+                        <label for="window-minutes">ดูย้อนหลัง (นาที)</label>
+                        <input id="window-minutes" type="number" value="10" min="1" max="120">
+                    </div>
+                </div>
+                <button onclick="askLatency()">ถาม chatbot</button>
+                <div id="chat-result" class="response muted">ยังไม่มีคำตอบ</div>
+            </article>
+        </section>
+    </div>
+
+    <script>
+        const API = "http://localhost:18081";
+
+        function renderPretty(value) {
+            return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+        }
+
+        function statusMarkup(label, payload) {
+            const ok = Boolean(payload && payload.ok);
+            const statusText = ok ? "online" : "offline";
+            const detail = payload.error
+                ? payload.error
+                : payload.status_code
+                    ? `HTTP ${payload.status_code}`
+                    : payload.rows !== undefined
+                        ? `${payload.rows} rows`
+                        : "no detail";
+
+            return `
+                <div class="status-pill">
+                    <strong>${label}</strong>
+                    <span class="${ok ? "online" : "offline"}">${statusText} • ${detail}</span>
+                </div>
+            `;
+        }
+
+        async function checkStatus() {
+            const container = document.getElementById("status-list");
+            container.innerHTML = statusMarkup("Loading", { ok: false, error: "กำลังตรวจ..." });
+
+            try {
+                const response = await fetch(`${API}/system/status`);
+                const data = await response.json();
+                const services = data.services || {};
+                container.innerHTML = [
+                    statusMarkup("Kong Status API", services.kong_status_api || {}),
+                    statusMarkup("Prometheus", services.prometheus || {}),
+                    statusMarkup("Grafana", services.grafana || {}),
+                    statusMarkup("Ollama", services.ollama || {}),
+                    statusMarkup("Database", services.database || {})
+                ].join("");
+            } catch (error) {
+                container.innerHTML = statusMarkup("Backend", { ok: false, error: error.message });
+            }
+        }
+
+        async function probeKong() {
+            const path = document.getElementById("probe-path").value;
+            const output = document.getElementById("probe-result");
+            output.textContent = "กำลังยิง request ผ่าน Kong...";
+
+            try {
+                const response = await fetch(`${API}/probe/kong?path=${encodeURIComponent(path)}`);
+                const data = await response.json();
+                output.textContent = renderPretty(data);
+            } catch (error) {
+                output.textContent = error.message;
+            }
+        }
+
+        async function generateTraffic() {
+            const path = document.getElementById("traffic-path").value;
+            const count = document.getElementById("traffic-count").value;
+            const output = document.getElementById("traffic-result");
+            output.textContent = "กำลังสร้าง traffic ผ่าน Kong...";
+
+            try {
+                const response = await fetch(
+                    `${API}/generate-traffic?count=${encodeURIComponent(count)}&path=${encodeURIComponent(path)}`
+                );
+                const data = await response.json();
+                output.textContent = renderPretty(data);
+            } catch (error) {
+                output.textContent = error.message;
+            }
+        }
+
+        async function askLatency() {
+            const question = document.getElementById("question").value;
+            const minutes = document.getElementById("window-minutes").value;
+            const output = document.getElementById("chat-result");
+            output.textContent = "กำลังวิเคราะห์ latency...";
+
+            try {
+                const response = await fetch(
+                    `${API}/ask?minutes=${encodeURIComponent(minutes)}&question=${encodeURIComponent(question)}`
+                );
+                const data = await response.json();
+                output.textContent = `${data.answer}\n\nTop routes:\n${renderPretty(data.top_routes)}`;
+            } catch (error) {
+                output.textContent = error.message;
+            }
+        }
+
+        window.onload = checkStatus;
+    </script>
+</body>
+</html>

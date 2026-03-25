@@ -1,0 +1,144 @@
+services:
+  kong:
+    image: kong/kong-gateway:3.13
+    container_name: kong-gateway
+    environment:
+      KONG_ROLE: data_plane
+      KONG_DATABASE: "off"
+      KONG_VITALS: "off"
+      KONG_CLUSTER_MTLS: pki
+      KONG_CLUSTER_CONTROL_PLANE: 597e517240.us.cp.konghq.com:443
+      KONG_CLUSTER_SERVER_NAME: 597e517240.us.cp.konghq.com
+      KONG_CLUSTER_TELEMETRY_ENDPOINT: 597e517240.us.tp.konghq.com:443
+      KONG_CLUSTER_TELEMETRY_SERVER_NAME: 597e517240.us.tp.konghq.com
+      KONG_CLUSTER_CERT: /etc/kong/cluster/tls.crt
+      KONG_CLUSTER_CERT_KEY: /etc/kong/cluster/tls.key
+      KONG_LUA_SSL_TRUSTED_CERTIFICATE: system
+      KONG_KONNECT_MODE: "on"
+      KONG_STATUS_LISTEN: 0.0.0.0:8100
+    volumes:
+      - ./kong/certs:/etc/kong/cluster:ro
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+      - "8100:8100"
+    restart: unless-stopped
+
+  metrics-db:
+    image: postgres:16-alpine
+    container_name: metrics-db
+    environment:
+      POSTGRES_DB: metrics
+      POSTGRES_USER: metrics
+      POSTGRES_PASSWORD: metrics
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - metrics-db-data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metrics -d metrics"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - kong
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  chatbot:
+    build: ./chatbot
+    container_name: latency-chatbot
+    environment:
+      DATABASE_URL: postgresql://metrics:metrics@metrics-db:5432/metrics
+      PROMETHEUS_URL: http://prometheus:9090
+      OLLAMA_URL: http://ollama:11434/api/generate
+      OLLAMA_MODEL: phi3:mini
+      KONG_PROXY_URL: http://kong:8000
+      KONG_STATUS_URL: http://kong:8100/status/ready
+      GRAFANA_URL: http://grafana:3000
+      METRIC_LOOKBACK_MINUTES: "10"
+    ports:
+      - "18081:8080"
+    depends_on:
+      metrics-db:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+
+  metrics-worker:
+    build: ./metrics-worker
+    container_name: metrics-worker
+    environment:
+      DATABASE_URL: postgresql://metrics:metrics@metrics-db:5432/metrics
+      PROMETHEUS_URL: http://prometheus:9090
+      SCRAPE_WINDOW: 2m
+      POLL_INTERVAL_SECONDS: "15"
+    depends_on:
+      metrics-db:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+
+  ui-server:
+    image: nginx:alpine
+    container_name: latency-ui
+    ports:
+      - "8080:80"
+    volumes:
+      - ./ui-test/index.html:/usr/share/nginx/html/index.html:ro
+    depends_on:
+      - chatbot
+    restart: unless-stopped
+
+volumes:
+  grafana-data:
+  metrics-db-data:
+  ollama-data:
+  prometheus-data:
