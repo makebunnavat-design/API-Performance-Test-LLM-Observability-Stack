@@ -18,6 +18,16 @@ This project demonstrates the implementation of a modern **API Management and Ob
 
 ---
 
+## 🛠️ Prerequisites
+Before running this stack, ensure you have the following installed:
+- **Docker Desktop**: With Docker Compose support.
+- **NVIDIA GPU & Drivers**: Required for Ollama acceleration (Windows/Linux).
+- **NVIDIA Container Toolkit**: If running on Linux.
+- **decK CLI**: For syncing Kong configurations.
+- **Kong Konnect Account**: To manage the control plane.
+
+---
+
 ## 🏗️ Architecture Design
 The entire stack is containerized via `docker-compose.yml`, deploying 8 highly cohesive microservices:
 
@@ -58,6 +68,14 @@ $env:KONNECT_CONTROL_PLANE_URL = "https://us.api.konghq.com"
 - **Control Room UI**: `http://localhost:8080`
 - **FastAPI Documentations**: `http://localhost:18081/docs`
 - **Grafana Dashboard**: `http://localhost:3000` *(admin / admin)*
+
+---
+
+## 🗺️ Future Roadmap
+- [ ] **Slack/Discord Integration**: Send automated alerts when P95 latency exceeds 500ms.
+- [ ] **Adaptive Rate Limiting**: Automatically tighten Kong rate limits when upstream latency spikes.
+- [ ] **Multi-Model Support**: Compare latency between different local models (phi3 vs llama3).
+- [ ] **Historical Analytics**: Long-term trend analysis using advanced PostgreSQL window functions.
 
 ---
 

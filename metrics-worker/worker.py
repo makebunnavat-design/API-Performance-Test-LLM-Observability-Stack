@@ -158,14 +158,22 @@ def write_snapshot(connection, snapshot_rows):
 
 
 def main():
+    print(f"Metrics worker started. Polling every {POLL_INTERVAL_SECONDS}s...")
     while True:
         try:
             with psycopg2.connect(DATABASE_URL) as connection:
                 ensure_schema(connection)
-                snapshot = collect_snapshot()
-                write_snapshot(connection, snapshot)
+                try:
+                    snapshot = collect_snapshot()
+                    write_snapshot(connection, snapshot)
+                except requests.exceptions.RequestException as req_exc:
+                    print(f"Prometheus connectivity error: {req_exc}")
+                except Exception as inner_exc:
+                    print(f"Metrics collection/write error: {inner_exc}")
+        except psycopg2.OperationalError as db_exc:
+            print(f"Database connection error: {db_exc}")
         except Exception as exc:
-            print(f"metrics-worker error: {exc}")
+            print(f"Unexpected metrics-worker error: {exc}")
 
         time.sleep(POLL_INTERVAL_SECONDS)
 

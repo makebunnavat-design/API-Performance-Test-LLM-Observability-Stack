@@ -7,10 +7,10 @@ services:
       KONG_DATABASE: "off"
       KONG_VITALS: "off"
       KONG_CLUSTER_MTLS: pki
-      KONG_CLUSTER_CONTROL_PLANE: 597e517240.us.cp.konghq.com:443
-      KONG_CLUSTER_SERVER_NAME: 597e517240.us.cp.konghq.com
-      KONG_CLUSTER_TELEMETRY_ENDPOINT: 597e517240.us.tp.konghq.com:443
-      KONG_CLUSTER_TELEMETRY_SERVER_NAME: 597e517240.us.tp.konghq.com
+      KONG_CLUSTER_CONTROL_PLANE: ${KONG_CP_ENDPOINT}:443
+      KONG_CLUSTER_SERVER_NAME: ${KONG_CP_ENDPOINT}
+      KONG_CLUSTER_TELEMETRY_ENDPOINT: ${KONG_TELEMETRY_ENDPOINT}:443
+      KONG_CLUSTER_TELEMETRY_SERVER_NAME: ${KONG_TELEMETRY_ENDPOINT}
       KONG_CLUSTER_CERT: /etc/kong/cluster/tls.crt
       KONG_CLUSTER_CERT_KEY: /etc/kong/cluster/tls.key
       KONG_LUA_SSL_TRUSTED_CERTIFICATE: system
@@ -28,16 +28,16 @@ services:
     image: postgres:16-alpine
     container_name: metrics-db
     environment:
-      POSTGRES_DB: metrics
-      POSTGRES_USER: metrics
-      POSTGRES_PASSWORD: metrics
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - metrics-db-data:/var/lib/postgresql/data
     ports:
-      - "5434:5432"
+      - "${POSTGRES_PORT}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U metrics -d metrics"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -62,8 +62,8 @@ services:
     image: grafana/grafana
     container_name: grafana
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -94,14 +94,14 @@ services:
     build: ./chatbot
     container_name: latency-chatbot
     environment:
-      DATABASE_URL: postgresql://metrics:metrics@metrics-db:5432/metrics
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@metrics-db:5432/${POSTGRES_DB}
       PROMETHEUS_URL: http://prometheus:9090
       OLLAMA_URL: http://ollama:11434/api/generate
-      OLLAMA_MODEL: phi3:mini
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
       KONG_PROXY_URL: http://kong:8000
       KONG_STATUS_URL: http://kong:8100/status/ready
       GRAFANA_URL: http://grafana:3000
-      METRIC_LOOKBACK_MINUTES: "10"
+      METRIC_LOOKBACK_MINUTES: ${METRIC_LOOKBACK_MINUTES}
     ports:
       - "18081:8080"
     depends_on:
@@ -115,7 +115,7 @@ services:
     build: ./metrics-worker
     container_name: metrics-worker
     environment:
-      DATABASE_URL: postgresql://metrics:metrics@metrics-db:5432/metrics
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@metrics-db:5432/${POSTGRES_DB}
       PROMETHEUS_URL: http://prometheus:9090
       SCRAPE_WINDOW: 2m
       POLL_INTERVAL_SECONDS: "15"

@@ -94,31 +94,38 @@ def normalize_metric_row(row):
 
 
 def fetch_recent_metrics(minutes, limit):
-    ensure_schema()
-    with closing(get_db_connection()) as connection:
-        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute(
-                """
-                SELECT
-                    service_name,
-                    route_name,
-                    AVG(request_rate) AS request_rate,
-                    AVG(avg_latency_ms) AS avg_latency_ms,
-                    MAX(p95_latency_ms) AS p95_latency_ms,
-                    AVG(kong_latency_ms) AS kong_latency_ms,
-                    AVG(upstream_latency_ms) AS upstream_latency_ms,
-                    MAX(captured_at) AS last_seen
-                FROM route_metrics
-                WHERE captured_at >= NOW() - (%s * INTERVAL '1 minute')
-                GROUP BY service_name, route_name
-                ORDER BY AVG(avg_latency_ms) DESC NULLS LAST, AVG(request_rate) DESC
-                LIMIT %s
-                """,
-                (minutes, limit),
-            )
-            rows = cursor.fetchall()
+    try:
+        ensure_schema()
+        with closing(get_db_connection()) as connection:
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        service_name,
+                        route_name,
+                        AVG(request_rate) AS request_rate,
+                        AVG(avg_latency_ms) AS avg_latency_ms,
+                        MAX(p95_latency_ms) AS p95_latency_ms,
+                        AVG(kong_latency_ms) AS kong_latency_ms,
+                        AVG(upstream_latency_ms) AS upstream_latency_ms,
+                        MAX(captured_at) AS last_seen
+                    FROM route_metrics
+                    WHERE captured_at >= NOW() - (%s * INTERVAL '1 minute')
+                    GROUP BY service_name, route_name
+                    ORDER BY AVG(avg_latency_ms) DESC NULLS LAST, AVG(request_rate) DESC
+                    LIMIT %s
+                    """,
+                    (minutes, limit),
+                )
+                rows = cursor.fetchall()
 
-    return [normalize_metric_row(row) for row in rows]
+        return [normalize_metric_row(row) for row in rows]
+    except psycopg2.Error as db_exc:
+        print(f"Database error in fetch_recent_metrics: {db_exc}")
+        return []
+    except Exception as exc:
+        print(f"Unexpected error in fetch_recent_metrics: {exc}")
+        return []
 
 
 def fetch_snapshot_count(minutes):
@@ -400,7 +407,13 @@ def ask_latency(
         try:
             final_answer = ask_ollama(question, summary, top_routes)
             used_ollama = True
-        except Exception:
+        except requests.exceptions.RequestException as req_exc:
+            print(f"Ollama connection error: {req_exc}")
+            final_answer = f"{local_answer} (หมายเหตุ: ไม่สามารถเชื่อมต่อ Ollama ได้ในขณะนี้ จึงใช้การวิเคราะห์แบบ Local แทน)"
+            used_ollama = False
+        except Exception as exc:
+            print(f"Ollama error: {exc}")
+            final_answer = f"{local_answer} (หมายเหตุ: เกิดข้อผิดพลาดในการประมวลผล AI)"
             used_ollama = False
 
     return {
