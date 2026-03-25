@@ -1,4 +1,14 @@
 __pycache__/
 *.pyc
+
+# Kong Secrets
 kong/certs/*.crt
 kong/certs/*.key
+
+# Vendor Binaries
+deck.exe
+deck.tar.gz
+*.tar.gz
+
+# Environment
+.env
